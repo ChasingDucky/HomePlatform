@@ -1,0 +1,243 @@
+// Prisma Schema for HomePlatform
+// Database: PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== User & Auth ====================
+
+model User {
+  id            String   @id @default(uuid())
+  phone         String?  @unique
+  email         String?  @unique
+  passwordHash  String   @map("password_hash")
+  name          String
+  avatar        String?
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  homeMembers   HomeMember[]
+  createdScenes Scene[]
+  createdAutomations Automation[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("refresh_tokens")
+}
+
+// ==================== Home & Members ====================
+
+model Home {
+  id        String   @id @default(uuid())
+  name      String
+  address   String?
+  timezone  String   @default("UTC")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  members    HomeMember[]
+  devices    Device[]
+  rooms      Room[]
+  scenes     Scene[]
+  automations Automation[]
+
+  @@map("homes")
+}
+
+model HomeMember {
+  id          String   @id @default(uuid())
+  homeId      String   @map("home_id")
+  userId      String   @map("user_id")
+  role        String   // 'owner', 'family', 'guest'
+  permissions Json?
+  joinedAt    DateTime @default(now()) @map("joined_at")
+
+  // Relations
+  home Home @relation(fields: [homeId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([homeId, userId])
+  @@map("home_members")
+}
+
+model Room {
+  id         String   @id @default(uuid())
+  homeId     String   @map("home_id")
+  name       String
+  icon       String?
+  orderIndex Int      @default(0) @map("order_index")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  // Relations
+  home    Home     @relation(fields: [homeId], references: [id], onDelete: Cascade)
+  devices Device[]
+
+  @@map("rooms")
+}
+
+// ==================== Devices ====================
+
+model Device {
+  id               String   @id @default(uuid())
+  homeId           String   @map("home_id")
+  deviceId         String   @unique @map("device_id") // Physical device ID
+  name             String
+  type             String   // 'light', 'switch', 'sensor', 'camera', 'appliance'
+  protocol         String   // 'matter', 'zigbee', 'wifi', 'ble'
+  manufacturer     String?
+  model            String?
+  firmwareVersion  String?  @map("firmware_version")
+  room             String?
+  capabilities     Json     // ['power', 'brightness', 'color']
+  state            Json     // Current state
+  metadata         Json?
+  online           Boolean  @default(true)
+  lastSeen         DateTime? @map("last_seen")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  home       Home   @relation(fields: [homeId], references: [id], onDelete: Cascade)
+  roomModel  Room?  @relation(fields: [room], references: [id])
+
+  @@map("devices")
+}
+
+// ==================== Scenes ====================
+
+model Scene {
+  id         String   @id @default(uuid())
+  homeId     String   @map("home_id")
+  name       String
+  icon       String?
+  background String?
+  actions    Json     // Array of SceneAction
+  createdBy  String   @map("created_by")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  home       Home            @relation(fields: [homeId], references: [id], onDelete: Cascade)
+  creator    User            @relation(fields: [createdBy], references: [id])
+  executions SceneExecution[]
+
+  @@map("scenes")
+}
+
+model SceneExecution {
+  id          String   @id @default(uuid())
+  sceneId     String   @map("scene_id")
+  executedBy  String?  @map("executed_by")
+  success     Boolean
+  duration    Int      // milliseconds
+  error       String?
+  executedAt  DateTime @default(now()) @map("executed_at")
+
+  // Relations
+  scene Scene @relation(fields: [sceneId], references: [id], onDelete: Cascade)
+
+  @@map("scene_executions")
+}
+
+// ==================== Automations ====================
+
+model Automation {
+  id         String   @id @default(uuid())
+  homeId     String   @map("home_id")
+  name       String
+  enabled    Boolean  @default(true)
+  trigger    Json     // Trigger configuration
+  conditions Json?    // Array of conditions
+  actions    Json     // Array of actions
+  createdBy  String   @map("created_by")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  home       Home                  @relation(fields: [homeId], references: [id], onDelete: Cascade)
+  creator    User                  @relation(fields: [createdBy], references: [id])
+  executions AutomationExecution[]
+
+  @@map("automations")
+}
+
+model AutomationExecution {
+  id             String   @id @default(uuid())
+  automationId   String   @map("automation_id")
+  triggerEvent   Json     @map("trigger_event")
+  conditionsMet  Boolean  @map("conditions_met")
+  success        Boolean
+  duration       Int      // milliseconds
+  error          String?
+  executedAt     DateTime @default(now()) @map("executed_at")
+
+  // Relations
+  automation Automation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+
+  @@map("automation_executions")
+}
+
+// ==================== AI & Analytics ====================
+
+model UserAction {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  homeId     String   @map("home_id")
+  actionType String   @map("action_type") // 'device_control', 'scene_execute', etc.
+  deviceId   String?  @map("device_id")
+  sceneId    String?  @map("scene_id")
+  metadata   Json?
+  timestamp  DateTime @default(now())
+
+  @@index([userId, homeId, timestamp])
+  @@map("user_actions")
+}
+
+model AIRecommendation {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  homeId      String   @map("home_id")
+  type        String   // 'scene', 'automation'
+  title       String
+  description String
+  confidence  Float
+  data        Json     // Recommendation data
+  accepted    Boolean?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([userId, homeId, createdAt])
+  @@map("ai_recommendations")
+}
+
+// ==================== Notifications ====================
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  homeId    String   @map("home_id")
+  type      String   // 'info', 'warning', 'error', 'success'
+  title     String
+  message   String
+  data      Json?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId, read, createdAt])
+  @@map("notifications")
+}
