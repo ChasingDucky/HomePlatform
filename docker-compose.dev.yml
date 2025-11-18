@@ -1,0 +1,150 @@
+version: '3.8'
+
+# Development environment with hot-reload
+services:
+  # Backend API (Development mode with hot-reload)
+  backend:
+    build:
+      context: ./src/backend
+      dockerfile: Dockerfile.dev
+    container_name: homeplatform-backend-dev
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DATABASE_URL: postgresql://homeplatform:homeplatform_dev@postgres:5432/homeplatform?schema=public
+      TIMESCALEDB_URL: postgresql://homeplatform:homeplatform_dev@timescaledb:5432/homeplatform_timeseries?schema=public
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      RABBITMQ_URL: amqp://homeplatform:homeplatform_dev@rabbitmq:5672
+      JWT_SECRET: dev-secret-change-in-production
+      JWT_EXPIRES_IN: 7d
+      CORS_ORIGIN: http://localhost:3001,http://localhost:3000
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./src/backend:/app
+      - /app/node_modules
+      - /app/dist
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - homeplatform-network
+    command: npm run dev
+
+  # PostgreSQL 数据库
+  postgres:
+    image: postgres:14-alpine
+    container_name: homeplatform-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: homeplatform
+      POSTGRES_PASSWORD: homeplatform_dev
+      POSTGRES_DB: homeplatform
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data-dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U homeplatform"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - homeplatform-network
+
+  # Redis 缓存
+  redis:
+    image: redis:7-alpine
+    container_name: homeplatform-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data-dev:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - homeplatform-network
+
+  # TimescaleDB 时序数据库
+  timescaledb:
+    image: timescale/timescaledb:latest-pg14
+    container_name: homeplatform-timescaledb
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: homeplatform
+      POSTGRES_PASSWORD: homeplatform_dev
+      POSTGRES_DB: homeplatform_timeseries
+    ports:
+      - "5433:5432"
+    volumes:
+      - timescaledb-data-dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U homeplatform"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - homeplatform-network
+
+  # RabbitMQ 消息队列
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: homeplatform-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: homeplatform
+      RABBITMQ_DEFAULT_PASS: homeplatform_dev
+    ports:
+      - "5672:5672"   # AMQP
+      - "15672:15672" # Management UI
+    volumes:
+      - rabbitmq-data-dev:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - homeplatform-network
+
+  # MinIO 对象存储
+  minio:
+    image: minio/minio:latest
+    container_name: homeplatform-minio
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: homeplatform
+      MINIO_ROOT_PASSWORD: homeplatform_dev
+    ports:
+      - "9000:9000"   # API
+      - "9001:9001"   # Console
+    volumes:
+      - minio-data-dev:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - homeplatform-network
+
+volumes:
+  postgres-data-dev:
+  redis-data-dev:
+  timescaledb-data-dev:
+  rabbitmq-data-dev:
+  minio-data-dev:
+
+networks:
+  homeplatform-network:
+    driver: bridge
