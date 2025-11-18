@@ -1,0 +1,47 @@
+{
+  "name": "homeplatform",
+  "version": "1.0.0",
+  "description": "统一、开放、隐私友好的智能家居控制平台",
+  "private": true,
+  "workspaces": [
+    "src/backend",
+    "src/frontend",
+    "src/mobile",
+    "src/hub",
+    "src/sdk"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "clean": "turbo run clean && rm -rf node_modules",
+    "migrate": "npm run migrate --workspace=src/backend",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "prettier": "^3.1.0",
+    "turbo": "^1.11.0",
+    "typescript": "^5.3.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/YourOrg/HomePlatform.git"
+  },
+  "keywords": [
+    "smart-home",
+    "iot",
+    "home-automation",
+    "matter",
+    "ai"
+  ],
+  "author": "HomePlatform Team",
+  "license": "MIT"
+}

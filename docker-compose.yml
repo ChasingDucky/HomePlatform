@@ -1,0 +1,101 @@
+version: '3.8'
+
+services:
+  # PostgreSQL 数据库
+  postgres:
+    image: postgres:14-alpine
+    container_name: homeplatform-postgres
+    environment:
+      POSTGRES_USER: homeplatform
+      POSTGRES_PASSWORD: homeplatform_dev
+      POSTGRES_DB: homeplatform
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U homeplatform"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis 缓存
+  redis:
+    image: redis:7-alpine
+    container_name: homeplatform-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # TimescaleDB 时序数据库
+  timescaledb:
+    image: timescale/timescaledb:latest-pg14
+    container_name: homeplatform-timescaledb
+    environment:
+      POSTGRES_USER: homeplatform
+      POSTGRES_PASSWORD: homeplatform_dev
+      POSTGRES_DB: homeplatform_timeseries
+    ports:
+      - "5433:5432"
+    volumes:
+      - timescaledb-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U homeplatform"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # RabbitMQ 消息队列
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: homeplatform-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: homeplatform
+      RABBITMQ_DEFAULT_PASS: homeplatform_dev
+    ports:
+      - "5672:5672"   # AMQP
+      - "15672:15672" # Management UI
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # MinIO 对象存储
+  minio:
+    image: minio/minio:latest
+    container_name: homeplatform-minio
+    environment:
+      MINIO_ROOT_USER: homeplatform
+      MINIO_ROOT_PASSWORD: homeplatform_dev
+    ports:
+      - "9000:9000"   # API
+      - "9001:9001"   # Console
+    volumes:
+      - minio-data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+volumes:
+  postgres-data:
+  redis-data:
+  timescaledb-data:
+  rabbitmq-data:
+  minio-data:
+
+networks:
+  default:
+    name: homeplatform-network
